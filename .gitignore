@@ -1,0 +1,28 @@
+# Nothing produced by an install may ever be committed.
+*.log
+install-manifest.json
+preflight-report.json
+bootstrap-provenance.json
+start-wa-bridge.ps1
+pairing-qr.png
+scan-me.html
+store/
+*.db
+*.db-*
+.apikey*
+*.bak
+*.bak-*
+*.tmp
+
+# Scratch left by the gate's CGO compile probe if it ever runs here
+/go.mod
+/go.sum
+probe.exe
+cgoprobe-*/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
