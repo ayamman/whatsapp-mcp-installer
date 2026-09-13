@@ -55,6 +55,10 @@ cd $env:USERPROFILE\Dev\whatsapp-mcp-installer
 powershell -ExecutionPolicy Bypass -File .\install.ps1 -AutoFix
 ```
 
+Your clone is safe if you later use the one-liner too: the bootstrap unpacks into
+`Dev\wa-mcp-pkg`, a different folder, and it refuses outright to replace anything
+containing a `.git` directory.
+
 ## Before you start
 
 - Windows 10/11, 64-bit

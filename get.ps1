@@ -20,7 +20,9 @@ param(
   # full commit SHA to pin this laptop to an exact version.
   [string]$Ref        = 'latest',
   [string]$Repo       = 'ayamman/whatsapp-mcp-installer',
-  [string]$Dest       = "$env:USERPROFILE\Dev\whatsapp-mcp-installer",
+  # NOT the same folder the README tells you to clone into: this bootstrap
+  # REPLACES its destination, and a clone there would be destroyed.
+  [string]$Dest       = "$env:USERPROFILE\Dev\wa-mcp-pkg",
   [int]$Port          = 8080,
   # AutoFix is ON by default: a fresh laptop needs git, Go, Python and a C
   # compiler, and installing them by hand is the step people get wrong.
@@ -94,7 +96,21 @@ $root = @(Get-ChildItem $ex -Directory)
 if ($root.Count -ne 1) { throw "unexpected archive layout ($($root.Count) top-level folders)" }
 $src = $root[0].FullName
 
-if (Test-Path $Dest) { Remove-Item $Dest -Recurse -Force }
+# Installing REPLACES $Dest. Refuse to do that to anything that is not obviously a
+# previous copy of this package - a git clone above all. SECURITY.md tells people to
+# clone and read the code before running it, and that clone has to survive this.
+if (Test-Path $Dest) {
+  if (Test-Path (Join-Path $Dest '.git')) {
+    throw "$Dest is a git repository. This bootstrap replaces its destination folder, which would destroy that clone and any local changes in it. Either re-run with -Dest pointing at a different folder, or just run .\install.ps1 from inside the clone."
+  }
+  $looksLikeOurs = (Test-Path (Join-Path $Dest 'install.ps1')) -or
+                   (Test-Path (Join-Path $Dest 'bootstrap-provenance.json'))
+  $isEmpty = @(Get-ChildItem $Dest -Force -EA SilentlyContinue).Count -eq 0
+  if (-not $looksLikeOurs -and -not $isEmpty) {
+    throw "$Dest already exists and does not look like a previous copy of this package. Refusing to delete it. Re-run with -Dest pointing at a new or empty folder."
+  }
+  Remove-Item $Dest -Recurse -Force
+}
 New-Item -ItemType Directory -Path $Dest -Force | Out-Null
 Copy-Item (Join-Path $src '*') $Dest -Recurse -Force
 
@@ -130,4 +146,10 @@ Write-Host ''
 $rc = $LASTEXITCODE
 
 Remove-Item $tmp -Recurse -Force -EA SilentlyContinue
-exit $rc
+
+# Deliberately NOT 'exit $rc'. In the script-block form -
+#   & ([scriptblock]::Create((irm .../get.ps1))) -DryRun
+# - exit terminates the CALLER's session, so anything after the call never runs.
+# Surface the installer's result instead and let the caller decide.
+$global:LASTEXITCODE = $rc
+if ($rc -ne 0) { Say "the installer exited with code $rc" 'Yellow' }
