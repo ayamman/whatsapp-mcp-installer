@@ -321,6 +321,13 @@ $mcpExe    = Join-Path $InstallRoot 'whatsapp-mcp-server\whatsapp-mcp.exe'
   mcpExe       = $mcpExe
   mcpSha256    = (Get-FileHash $mcpExe -Algorithm SHA256).Hash
   scheduledTask= $taskName
+  # Recorded so the fleet can be audited later without visiting each laptop.
+  # 0=off 1=enforcement 2=evaluation. Enforcement stops this unsigned bridge;
+  # evaluation means Windows has not decided yet and may move either way.
+  smartAppControl = $(
+    $sacv = (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -EA SilentlyContinue).VerifiedAndReputablePolicyState
+    switch ($sacv) { 0 {'off'} 1 {'enforcement'} 2 {'evaluation'} default {'not-applicable'} })
+  enterpriseManaged = $((Get-CimInstance Win32_ComputerSystem -EA SilentlyContinue).PartOfDomain -eq $true)
   storePath    = Join-Path $InstallRoot 'whatsapp-bridge\store'
   auditLog     = Join-Path $InstallRoot 'whatsapp-bridge\store\audit.log'
   envVars      = @('WHATSAPP_API_KEY','WHATSAPP_JWT_SECRET','WHATSAPP_SEND_ALLOWLIST','IS_POSTGRES','HOST','PORT','LOG_LEVEL','BRIDGE_TZ','AUTH_LOGIN_RATE')
