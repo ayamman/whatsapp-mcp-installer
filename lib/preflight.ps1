@@ -10,9 +10,9 @@
   Every simulated run is labelled on screen and recorded in the report, so a
   simulated verdict can never be mistaken for a real one.
 
-    failures : no-gcc, no-go, old-go, no-git, no-python, port-busy,
-               arch-mismatch, tls-intercept, no-network, sac-enforced,
-               onedrive, low-disk, cfa-on, no-admin, cgo-fail
+    failures : no-gcc, no-go, old-go, no-git, no-python, no-git-remote,
+               port-busy, arch-mismatch, tls-intercept, no-network,
+               sac-enforced, onedrive, low-disk, cfa-on, no-admin, cgo-fail
     passes   : tls-ok   - pretend the four required hosts present public-CA
                           certificates. Lets you rehearse a full PROCEED on a
                           network that inspects TLS, where C11 would otherwise
@@ -23,6 +23,9 @@ param(
   [string]$Simulate = '',
   [string]$InstallRoot = "$env:USERPROFILE\Dev\whatsapp-mcp-go",
   [int]$Port = 8080,
+  # The repository Stage 2 clones. install.ps1 passes its own value; the default
+  # here only matters when the gate is run by hand.
+  [string]$Origin = 'https://github.com/vimigo-lee/whatsapp-mcp-go.git',
   # Defaults to the installer's own work folder, so a gate run by hand leaves
   # its report in the same place as one run by the installer.
   [string]$ReportPath = "$env:USERPROFILE\Dev\wa-mcp\preflight-report.json",
@@ -197,6 +200,35 @@ else { Add-Check -Id 'C10' -Req 'R5' -Name 'Network reachability' -Status 'FAIL'
 
 if ($intercepted.Count -eq 0) { Add-Check -Id 'C11' -Req 'R5' -Name 'TLS interception' -Status 'PASS' -Detail 'certificates issued by public CAs' }
 else { Add-Check -Id 'C11' -Req 'R5' -Name 'TLS interception' -Status 'FAIL' -Detail ($intercepted -join '; ') -Remedy 'A firewall is re-signing HTTPS. Go module downloads and the WhatsApp websocket will both fail. Exempt these hosts or install from a network without inspection.' }
+
+# ---------------------------------------------------------------- C20 git reachability
+# C10 proves a TLS handshake to github.com from .NET. It does NOT prove that *git*
+# can get there. Chrome and PowerShell may resolve through their own DoH while git
+# uses the Windows resolver, so a laptop can pass every other check and then die at
+# Stage 2 on "Could not resolve host" - after -AutoFix has already installed ~1 GB of
+# toolchain. This runs the same operation Stage 2 depends on, before anything changes.
+if (Sim 'no-git-remote') {
+  Add-Check -Id 'C20' -Req 'R5' -Name 'git can reach the source' -Status 'FAIL' `
+    -Detail 'simulated: fatal: unable to access - Could not resolve host: github.com' `
+    -Remedy 'Stage 2 clones from this URL, so the install cannot proceed. The reason git gives is shown above - read that first. The usual cause on Windows is the DNS resolver not answering while the browser resolves through its own secure DNS; test with: nslookup github.com   If that fails, set the adapter DNS (1.1.1.1 or 8.8.8.8) or install from another network such as a phone hotspot. If a proxy or firewall is in the way, git has to be able to use it too.'
+} elseif (-not $gitCmd) {
+  Add-Check -Id 'C20' -Req 'R5' -Name 'git can reach the source' -Status 'FAIL' `
+    -Detail 'skipped - git not found' -Remedy 'Resolve C6 first.'
+} else {
+  $env:GIT_TERMINAL_PROMPT = '0'   # never sit waiting for credentials on a public repo
+  # Call git directly rather than through cmd: one less shell in the way, and the
+  # exit code is trustworthy.
+  $lsr = (& git ls-remote --heads $Origin 2>&1) | Out-String
+  $lsrOk = ($LASTEXITCODE -eq 0) -and ($lsr -match 'refs/heads/')
+  if ($lsrOk) {
+    Add-Check -Id 'C20' -Req 'R5' -Name 'git can reach the source' -Status 'PASS' -Detail 'git ls-remote succeeded'
+  } else {
+    $why = ($lsr.Trim() -split "`n" | Where-Object { $_.Trim() } | Select-Object -First 1)
+    if (-not $why) { $why = "git ls-remote failed with exit code $LASTEXITCODE and no output" }
+    Add-Check -Id 'C20' -Req 'R5' -Name 'git can reach the source' -Status 'FAIL' -Detail "$why" `
+      -Remedy 'Stage 2 clones from this URL, so the install cannot proceed. The reason git gives is shown above - read that first. The usual cause on Windows is the DNS resolver not answering while the browser resolves through its own secure DNS; test with: nslookup github.com   If that fails, set the adapter DNS (1.1.1.1 or 8.8.8.8) or install from another network such as a phone hotspot. If a proxy or firewall is in the way, git has to be able to use it too.'
+  }
+}
 
 $ie = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -EA SilentlyContinue
 $proxyOn = ($ie.ProxyEnable -eq 1) -or $env:HTTPS_PROXY

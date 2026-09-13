@@ -48,7 +48,7 @@ Head "Stage 1 of 8 - checking this laptop meets the requirements"
 $gate = Join-Path $PKG 'lib\preflight.ps1'
 if (-not (Test-Path $gate)) { Die "preflight gate not found at $gate" }
 $rep = Join-Path $WorkRoot 'preflight-report.json'
-& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $gate -InstallRoot $InstallRoot -Port $Port -ReportPath $rep
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $gate -InstallRoot $InstallRoot -Port $Port -ReportPath $rep -Origin $ORIGIN
 $gateCode = $LASTEXITCODE
 
 if ($gateCode -ne 0 -and $AutoFix) {
@@ -72,7 +72,7 @@ if ($gateCode -ne 0 -and $AutoFix) {
     $env:PATH = (@($mp, $up, $env:PATH) | Where-Object { $_ }) -join ';'
     L "PATH refreshed from the registry after AutoFix"
     Head "re-running the gate after AutoFix"
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $gate -InstallRoot $InstallRoot -Port $Port -ReportPath $rep
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $gate -InstallRoot $InstallRoot -Port $Port -ReportPath $rep -Origin $ORIGIN
     $gateCode = $LASTEXITCODE
   }
 }
